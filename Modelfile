@@ -1,0 +1,3 @@
+﻿FROM phi
+PARAMETER num_ctx 512
+PARAMETER low_vram true

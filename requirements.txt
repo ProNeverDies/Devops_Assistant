@@ -1,0 +1,14 @@
+psutil
+docker
+requests
+rich
+python-dotenv
+imap-tools
+schedule
+pyyaml
+langchain
+langgraph
+pytest
+pytest-cov
+pip-audit
+imap_tools
