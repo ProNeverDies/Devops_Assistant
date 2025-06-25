@@ -504,47 +504,53 @@ def generate_project_report() -> str:
         return f"Error generating project report: {e}"
 
 # Email tools
+
+
+
 @tool
 def list_unread_emails(limit: int = 5) -> str:
     """
-    Return up to `limit` unread messages' UID, subject, date, and sender.
-    Ensures we don’t hang indefinitely on large inboxes.
+    Return up to `limit` unread messages: UID, date, sender, subject.
+    Adds a 10s timeout to prevent hanging.
     """
-    host = assistant.config['imap_host']
-    user = assistant.config['imap_user']
-    pw   = assistant.config['imap_password']
+    host = assistant.config.get('imap_host')
+    user = assistant.config.get('imap_user')
+    pw   = assistant.config.get('imap_password')
     if not all([host, user, pw]):
-        return "❌ Email configuration not available"
+        return "❌ Email configuration not available."
 
     try:
-        # set a short mailbox timeout
         with MailBox(host, timeout=10).login(user, pw, initial_folder='INBOX') as mb:
-            unread = mb.fetch(
+            msgs = mb.fetch(
                 criteria=AND(seen=False),
                 headers_only=True,
                 mark_seen=False,
-                reverse=True,      # newest first
+                reverse=True,
                 limit=limit
             )
-            data = []
-            for msg in unread:
-                data.append(f"UID: {msg.uid} | {msg.date.strftime('%Y-%m-%d %H:%M')} | "
-                            f"From: {msg.from_} | Subject: {msg.subject or '(no subject)'}")
-            return "\n".join(data) if data else "📭 No unread messages."
+            lines = []
+            for m in msgs:
+                dt = m.date.astimezone().strftime("%Y-%m-%d %H:%M")
+                sender = m.from_ or "(unknown)"
+                subj   = m.subject or "(no subject)"
+                lines.append(f"UID {m.uid} | {dt} | From: {sender} | Subject: {subj}")
+            return "\n".join(lines) if lines else "📭 No unread messages."
     except Exception as e:
         return f"❌ Error accessing email: {e}"
+
 
 
 @tool
 def summarize_email(uid: str) -> str:
     """
-    Summarize one e-mail by UID in 2–3 sentences.
+    Summarize a single email by UID in 2-3 sentences.
+    Truncates body to 500 chars.
     """
-    host = assistant.config['imap_host']
-    user = assistant.config['imap_user']
-    pw   = assistant.config['imap_password']
+    host = assistant.config.get('imap_host')
+    user = assistant.config.get('imap_user')
+    pw   = assistant.config.get('imap_password')
     if not all([host, user, pw]):
-        return "❌ Email configuration not available"
+        return "❌ Email configuration not available."
 
     try:
         with MailBox(host, timeout=10).login(user, pw, initial_folder='INBOX') as mb:
@@ -552,7 +558,6 @@ def summarize_email(uid: str) -> str:
             if not mail:
                 return f"❌ No email found with UID {uid}"
 
-            # Only include the first 500 chars of body
             body = (mail.text or mail.html or "")[:500]
             prompt = (
                 f"Summarize this email in 2–3 sentences:\n\n"
@@ -564,7 +569,6 @@ def summarize_email(uid: str) -> str:
         return f"❌ Error summarizing email: {e}"
 
 
-# Legacy tools (enhanced)
 @tool
 def check_git_status() -> str:
     """Run 'git status' and return the result with additional analysis."""
@@ -1031,11 +1035,9 @@ def display_dashboard():
     except KeyboardInterrupt:
         console.print("\n[yellow]Dashboard stopped by user[/yellow]")
 
-
 def interactive_chat():
     console.print(Panel("[bold green]DevOps Assistant Interactive Chat[/bold green]\nType 'quit' to exit, 'help' for commands"))
 
-    # Map of exact commands → functions
     direct = {
         'system metrics': get_system_metrics,
         'docker status': monitor_docker_containers,
@@ -1044,8 +1046,7 @@ def interactive_chat():
         'security audit': security_audit,
         'deploy': automated_deployment,
         'report': generate_project_report,
-        'email': list_unread_emails,       # your fixed tool
-        'summarize email': summarize_email, # accept "summarize email <UID>"
+        'email': list_unread_emails,
         'alerts': get_active_alerts,
     }
 
@@ -1072,37 +1073,106 @@ def interactive_chat():
         if cmd == 'stop monitoring':
             assistant.stop_monitoring(); console.print("[red]Monitoring stopped[/red]"); continue
 
-        # exact-match direct calls
+        # Direct tool calls
         if cmd in direct:
             console.print(f"[bold blue]{cmd.title()}[/bold blue]")
             try:
-                output = direct[cmd].invoke("")  # call the tool
-                console.print(output)
+                out = direct[cmd].invoke("")   # call LangChain tool
+                console.print(out)
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
             continue
 
-        # handle "summarize email 1234"
+        # Summarize email special case
         if cmd.startswith('summarize email'):
             parts = cmd.split()
             if len(parts) == 3 and parts[2].isdigit():
-                uid = parts[2]
-                console.print("[bold blue]Summarize Email[/bold blue]")
-                try:
-                    output = direct["summarize email"].invoke(uid)
-                    console.print(output)
-                except Exception as e:
-                    console.print(f"[red]Error summarizing email: {e}[/red]")
-                continue
+                console.print("[bold blue]Summarizing Email[/bold blue]")
+                console.print(summarize_email.invoke(parts[2]))
+            else:
+                console.print("[red]Usage: summarize email <UID>[/red]")
+            continue
 
-
-        # fallback to plain LLM (no tool binding)
+        # Fallback to raw LLM
         try:
             with console.status("[bold green]Thinking..."):
                 resp = assistant.raw_llm.invoke([HumanMessage(content=user)])
                 console.print(f"[bold green]Assistant:[/bold green] {resp.content}")
         except Exception as e:
             console.print(f"[red]LLM error: {e}[/red]")
+
+
+# def interactive_chat():
+#     console.print(Panel("[bold green]DevOps Assistant Interactive Chat[/bold green]\nType 'quit' to exit, 'help' for commands"))
+
+#     # Map of exact commands → functions
+#     direct = {
+#         'system metrics': get_system_metrics,
+#         'docker status': monitor_docker_containers,
+#         'git status': advanced_git_analysis,
+#         'run tests': run_tests,
+#         'security audit': security_audit,
+#         'deploy': automated_deployment,
+#         'report': generate_project_report,
+#         'email': list_unread_emails,       # your fixed tool
+#         'summarize email': summarize_email, # accept "summarize email <UID>"
+#         'alerts': get_active_alerts,
+#     }
+
+#     while True:
+#         user = Prompt.ask("\n[bold cyan]You[/bold cyan]").strip()
+#         cmd = user.lower()
+
+#         if cmd in ('quit','exit','bye'):
+#             console.print("[yellow]Goodbye![/yellow]")
+#             break
+#         if cmd == 'help':
+#             console.print(
+#                 "[bold]Commands:[/bold]\n"
+#                 "- system metrics\n- docker status\n- git status\n"
+#                 "- run tests\n- security audit\n- deploy\n- report\n"
+#                 "- email\n- summarize email <UID>\n- alerts\n"
+#                 "- dashboard\n- start monitoring\n- stop monitoring\n- quit"
+#             )
+#             continue
+#         if cmd == 'dashboard':
+#             display_dashboard(); continue
+#         if cmd == 'start monitoring':
+#             assistant.start_monitoring(); console.print("[green]Monitoring started[/green]"); continue
+#         if cmd == 'stop monitoring':
+#             assistant.stop_monitoring(); console.print("[red]Monitoring stopped[/red]"); continue
+
+#         # exact-match direct calls
+#         if cmd in direct:
+#             console.print(f"[bold blue]{cmd.title()}[/bold blue]")
+#             try:
+#                 output = direct[cmd].invoke("")  # call the tool
+#                 console.print(output)
+#             except Exception as e:
+#                 console.print(f"[red]Error: {e}[/red]")
+#             continue
+
+#         # handle "summarize email 1234"
+#         if cmd.startswith('summarize email'):
+#             parts = cmd.split()
+#             if len(parts) == 3 and parts[2].isdigit():
+#                 uid = parts[2]
+#                 console.print("[bold blue]Summarize Email[/bold blue]")
+#                 try:
+#                     output = direct["summarize email"].invoke(uid)
+#                     console.print(output)
+#                 except Exception as e:
+#                     console.print(f"[red]Error summarizing email: {e}[/red]")
+#                 continue
+
+
+#         # fallback to plain LLM (no tool binding)
+#         try:
+#             with console.status("[bold green]Thinking..."):
+#                 resp = assistant.raw_llm.invoke([HumanMessage(content=user)])
+#                 console.print(f"[bold green]Assistant:[/bold green] {resp.content}")
+#         except Exception as e:
+#             console.print(f"[red]LLM error: {e}[/red]")
 
 
 def main():

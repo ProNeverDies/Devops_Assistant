@@ -12,3 +12,4 @@ pytest
 pytest-cov
 pip-audit
 imap_tools
+httpx>=0.23.0
