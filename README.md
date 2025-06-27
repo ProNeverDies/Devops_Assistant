@@ -1,4 +1,4 @@
-# 🛠 DevOps Assistant (LLM-Powered) — Windows Edition
+#  DevOps Assistant (LLM-Powered) — Windows Edition
 
 > A smart, terminal-based assistant to monitor, audit, and automate your DevOps workflows  powered by Ollama, LangChain, and Python.
 
