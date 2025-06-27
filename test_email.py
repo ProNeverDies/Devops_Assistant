@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_email_configuration():
-    '''Test that email configuration variables are accessible'''
+    '''Testing our email configuration'''
     required_vars = ['IMAP_HOST', 'IMAP_USER', 'IMAP_PASSWORD']
     
     for var in required_vars:
@@ -14,7 +14,7 @@ def test_email_configuration():
         assert result is not None or result is None  
 
 def test_email_function_imports():
-    '''Test that our email functions can be imported'''
+    '''Testing our email functions '''
     try:
         from devops import list_unread_emails, summarize_email
         assert callable(list_unread_emails)
@@ -24,7 +24,7 @@ def test_email_function_imports():
         assert True
 
 def test_uid_validation():
-    '''Test UID validation logic'''
+    '''Testing UID validation logic'''
     
     valid_uid = "12345"
     assert valid_uid.isdigit()
@@ -36,7 +36,7 @@ def test_uid_validation():
     assert not empty_uid.isdigit()
 
 def test_email_error_handling():
-    '''Test that our error handling works'''
+    '''Testing our error handling '''
     config = {'imap_host': None, 'imap_user': None, 'imap_password': None}
     required_fields = ['imap_host', 'imap_user', 'imap_password']
     
@@ -44,7 +44,7 @@ def test_email_error_handling():
     assert not all_present  
     
 def test_string_truncation():
-    '''Test string truncation logic used in email display'''
+    '''Testing string truncation logic '''
     long_subject = "This is a very long email subject that should be truncated when displayed"
     
     if len(long_subject) > 50:
